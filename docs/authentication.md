@@ -13,10 +13,10 @@ token or password recovery feature in this phase.
 The signing key is `AUTH_JWT_SECRET`, supplied only through the environment and
 required by Compose. Generate a different random value for each environment
 (for example with Python's `secrets.token_urlsafe(48)`). It must be at least 32
-bytes. Auth issues tokens with issuer and audience claims, and the gateway and
-Orders validate the signature, issuer, audience, and expiry. Never commit the
-real key or log passwords, hashes, or tokens. `.env.example` contains only a
-replacement placeholder.
+bytes. Auth issues tokens with issuer and audience claims; Gateway, Orders,
+Catalog, and Payments validate signed tokens in their own request paths. Never
+commit the real key or log passwords, hashes, or tokens. `.env.example`
+contains only a blank value that must be replaced for the application to start.
 
 ## Protected routes and ownership
 
