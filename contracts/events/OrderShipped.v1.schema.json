@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.shopeasy.example/events/OrderShipped.v1.schema.json",
+  "title": "OrderShipped v1",
+  "allOf": [
+    {"$ref": "event-envelope.schema.json"},
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {"const": "OrderShipped"},
+        "producer": {"const": "shipping"},
+        "data": {
+          "type": "object",
+          "required": ["orderId", "shipmentId", "shippedAt"],
+          "properties": {
+            "orderId": {"type": "string", "format": "uuid"},
+            "shipmentId": {"type": "string", "format": "uuid"},
+            "shippedAt": {"type": "string", "format": "date-time"},
+            "trackingReference": {"type": "string", "maxLength": 200}
+          },
+          "additionalProperties": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.shopeasy.example/events/OrderPaid.v1.schema.json",
+  "title": "OrderPaid v1",
+  "allOf": [
+    {"$ref": "event-envelope.schema.json"},
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {"const": "OrderPaid"},
+        "producer": {"const": "orders"},
+        "data": {
+          "type": "object",
+          "required": ["orderId", "paymentId", "total"],
+          "properties": {
+            "orderId": {"type": "string", "format": "uuid"},
+            "paymentId": {"type": "string", "format": "uuid"},
+            "total": {"$ref": "#/$defs/money"}
+          },
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "money": {
+      "type": "object",
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,4})?$"},
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"}
+      },
+      "additionalProperties": true
+    }
+  }
+}

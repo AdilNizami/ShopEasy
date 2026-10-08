@@ -1,0 +1,1033 @@
+openapi: 3.1.0
+info:
+  title: ShopEasy API
+  version: 1.0.0
+  description: Versioned commerce API contracts. These schemas specify wire behavior, not service implementation.
+servers:
+  - url: https://api.shopeasy.example/v1
+    description: Public API base URL
+security: []
+tags:
+  - name: Products
+    description: Product catalog queries.
+  - name: Cart
+    description: Customer cart operations.
+  - name: Checkout
+    description: Checkout submission.
+  - name: Orders
+    description: Customer order queries.
+  - name: Payments
+    description: Payment request and status.
+  - name: Inventory
+    description: Stock availability and reservations.
+  - name: Authentication
+    description: User registration, login, and access-token identity.
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      operationId: registerUser
+      summary: Register a username and receive an access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Credentials'}
+      responses:
+        '201':
+          description: User registered and access token issued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccessToken'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: loginUser
+      summary: Exchange username and password for an access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Credentials'}
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccessToken'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Read the identity represented by the access token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authenticated user identity
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CurrentUser'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /products:
+    get:
+      tags: [Products]
+      security: []
+      operationId: listProducts
+      summary: List published products
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: q
+          in: query
+          schema: {type: string, minLength: 1, maxLength: 200}
+        - name: categoryId
+          in: query
+          schema: {type: string, format: uuid}
+        - name: minPrice
+          in: query
+          schema: {$ref: '#/components/schemas/Amount'}
+        - name: maxPrice
+          in: query
+          schema: {$ref: '#/components/schemas/Amount'}
+      responses:
+        '200':
+          description: Product page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      operationId: createProduct
+      summary: Create a catalog product
+      description: Operator access is required. Customer accounts may only read products.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProductCreate'}
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Product'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /categories:
+    get:
+      tags: [Products]
+      operationId: listCategories
+      summary: List product categories
+      security: []
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Category'}
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      operationId: createCategory
+      summary: Create a product category
+      description: Operator access is required. Customer accounts may only read categories.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CategoryCreate'}
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Category'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /carts:
+    post:
+      tags: [Cart]
+      operationId: createCart
+      summary: Create an empty cart
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Cart created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cart'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /carts/{cartId}:
+    get:
+      tags: [Cart]
+      operationId: getCart
+      summary: Retrieve a cart
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Cart
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cart'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /carts/{cartId}/items:
+    post:
+      tags: [Cart]
+      operationId: addCartItem
+      summary: Add quantity of a catalog product to a cart
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CartItemInput'}
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cart'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /carts/{cartId}/items/{productId}:
+    put:
+      tags: [Cart]
+      operationId: setCartItemQuantity
+      summary: Set the absolute quantity of a cart item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CartItemQuantity'}
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cart'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    delete:
+      tags: [Cart]
+      operationId: removeCartItem
+      summary: Remove a product from a cart
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Cart'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /products/{productId}:
+    get:
+      tags: [Products]
+      security: []
+      operationId: getProduct
+      summary: Get a product by identifier
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /checkout:
+    post:
+      tags: [Orders, Checkout]
+      operationId: checkout
+      summary: Check out cart items and create an order
+      description: Checkout revalidates catalog prices, reserves stock, and synchronously asks Payments for the mock outcome. A confirmed payment is reported to Orders asynchronously as PaymentConfirmed; the returned order may initially be PENDING_PAYMENT and becomes PAID after Orders consumes the event and commits stock.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '201':
+          description: Order created; the initial status may be PENDING_PAYMENT until the payment event is consumed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /orders:
+    get:
+      tags: [Orders]
+      operationId: listOrders
+      summary: List the caller's orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Order page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /inventory/availability/{productId}:
+    get:
+      tags: [Inventory]
+      operationId: getInventoryAvailability
+      summary: Get sellable quantity for a product
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Current available-to-sell quantity
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Availability'}
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /inventory/stock/{productId}:
+    put:
+      x-internal: true
+      tags: [Inventory]
+      operationId: setInventoryStock
+      summary: Set stock on hand
+      description: Internal inventory administration operation. Quantity cannot be reduced below active reservations.
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StockUpdate'}
+      responses:
+        '200':
+          description: Updated stock availability
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Availability'}
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /inventory/reservations:
+    post:
+      x-internal: true
+      tags: [Inventory]
+      operationId: reserveInventory
+      summary: Reserve stock for an order
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReservationRequest'}
+      responses:
+        '201':
+          description: Stock reserved until expiry
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reservation'}
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /inventory/reservations/{reservationId}/commit:
+    post:
+      x-internal: true
+      tags: [Inventory]
+      operationId: commitInventoryReservation
+      summary: Commit a reservation after successful payment
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Reservation committed and on-hand stock decremented
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reservation'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /inventory/reservations/{reservationId}/release:
+    post:
+      x-internal: true
+      tags: [Inventory]
+      operationId: releaseInventoryReservation
+      summary: Release a reservation after failed checkout
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Reservation released or already terminal
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Reservation'}
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      operationId: getOrder
+      summary: Get an order
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order representation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orders/{orderId}/status:
+    get:
+      tags: [Orders]
+      operationId: getOrderStatus
+      summary: Get the current order status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Current status and update time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /payments:
+    post:
+      tags: [Payments]
+      operationId: createPayment
+      summary: Request payment for an existing order
+      description: Uses the local mock provider. Use mock-success or mock-failure as the mock-only token; never send card data.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Mock payment outcome
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /payments/{paymentId}:
+    get:
+      tags: [Payments]
+      operationId: getPayment
+      summary: Get a payment attempt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Payment attempt status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      description: Product UUID.
+      schema: {type: string, format: uuid}
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      description: Order UUID.
+      schema: {type: string, format: uuid}
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      description: Payment UUID.
+      schema: {type: string, format: uuid}
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: {type: string, minLength: 1, maxLength: 512}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Reuse the same key and request after an uncertain result. Reusing a key with a different request returns 409.
+      schema: {type: string, minLength: 1, maxLength: 200}
+  schemas:
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: {type: string, minLength: 3, maxLength: 64, pattern: '^[a-zA-Z0-9_.-]+$'}
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          writeOnly: true
+    AccessToken:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresIn, userId]
+      properties:
+        accessToken: {type: string, minLength: 1}
+        tokenType: {type: string, const: Bearer}
+        expiresIn: {type: integer, minimum: 1}
+        userId: {type: string, format: uuid}
+    CurrentUser:
+      type: object
+      additionalProperties: false
+      required: [userId, username]
+      properties:
+        userId: {type: string, format: uuid}
+        username: {type: string, minLength: 3, maxLength: 64}
+        role:
+          type: string
+          enum: [customer, operator]
+          description: Optional authorization role. Existing clients can ignore this additive property.
+    Amount:
+      type: string
+      pattern: '^(0|[1-9][0-9]{0,11})(\.[0-9]{1,4})?$'
+      description: Non-negative decimal amount with at most four fractional digits.
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,11})(\.[0-9]{1,4})?$'
+          description: Non-negative decimal string; no floating point representation.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+    Availability:
+      type: object
+      additionalProperties: false
+      required: [productId, quantityAvailable, inStock]
+      properties:
+        productId: {type: string, format: uuid}
+        quantityAvailable: {type: integer, minimum: 0}
+        inStock: {type: boolean}
+    StockUpdate:
+      type: object
+      additionalProperties: false
+      required: [quantityOnHand]
+      properties:
+        quantityOnHand: {type: integer, minimum: 0}
+    ReservationRequest:
+      type: object
+      additionalProperties: false
+      required: [orderId, items]
+      properties:
+        orderId: {type: string, format: uuid}
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {$ref: '#/components/schemas/CartItemInput'}
+    Reservation:
+      type: object
+      additionalProperties: false
+      required: [reservationId, orderId, status, expiresAt, items]
+      properties:
+        reservationId: {type: string, format: uuid}
+        orderId: {type: string, format: uuid}
+        status: {type: string, enum: [RESERVED, RELEASED, EXPIRED, COMMITTED]}
+        expiresAt: {type: string, format: date-time}
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+              productId: {type: string, format: uuid}
+              quantity: {type: integer, minimum: 1, maximum: 99}
+    Product:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, price, sellable, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 5000}
+        price: {$ref: '#/components/schemas/Money'}
+        sellable: {type: boolean, description: Does not guarantee stock availability.}
+        categoryId: {type: [string, 'null'], format: uuid}
+        category: {type: [string, 'null']}
+        imageUrl: {type: [string, 'null'], format: uri}
+        updatedAt: {type: string, format: date-time}
+    ProductCreate:
+      type: object
+      additionalProperties: false
+      required: [name, price]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 5000}
+        price: {$ref: '#/components/schemas/Money'}
+        sellable: {type: boolean, default: true}
+        categoryId: {type: [string, 'null'], format: uuid}
+        imageUrl: {type: [string, 'null'], format: uri}
+    Category:
+      type: object
+      additionalProperties: false
+      required: [id, name, slug]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 100}
+        slug: {type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', maxLength: 120}
+    CategoryCreate:
+      type: object
+      additionalProperties: false
+      required: [name, slug]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        slug: {type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', maxLength: 120}
+    ProductPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/Product'}
+        nextCursor: {type: [string, 'null']}
+    CartItemInput:
+      type: object
+      additionalProperties: false
+      required: [productId, quantity]
+      properties:
+        productId: {type: string, format: uuid}
+        quantity: {type: integer, minimum: 1, maximum: 99}
+    CartInput:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 0
+          maxItems: 100
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/CartItemInput'}
+    CartItemQuantity:
+      type: object
+      additionalProperties: false
+      required: [quantity]
+      properties:
+        quantity: {type: integer, minimum: 1, maximum: 99}
+    CartItem:
+      type: object
+      additionalProperties: false
+      required: [productId, name, quantity, unitPrice]
+      properties:
+        productId: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 200}
+        quantity: {type: integer, minimum: 1, maximum: 99}
+        unitPrice: {$ref: '#/components/schemas/Money'}
+    Cart:
+      type: object
+      additionalProperties: false
+      required: [id, status, items, subtotal, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [ACTIVE, CHECKING_OUT, CHECKED_OUT]}
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/CartItem'}
+        subtotal: {oneOf: [{$ref: '#/components/schemas/Money'}, {type: 'null'}]}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    CheckoutRequest:
+      type: object
+      additionalProperties: false
+      required: [cartId, shippingAddress, paymentMethodToken]
+      properties:
+        cartId: {type: string, format: uuid}
+        shippingAddress: {$ref: '#/components/schemas/ShippingAddress'}
+        paymentMethodToken:
+          type: string
+          enum: [mock-success, mock-failure]
+          description: Local mock-provider outcome selector only. Never send card data.
+    ShippingAddress:
+      type: object
+      additionalProperties: false
+      required: [name, line1, city, postalCode, country]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        line1: {type: string, minLength: 1, maxLength: 200}
+        line2: {type: string, maxLength: 200}
+        city: {type: string, minLength: 1, maxLength: 100}
+        region: {type: string, maxLength: 100}
+        postalCode: {type: string, minLength: 1, maxLength: 24}
+        country: {type: string, pattern: '^[A-Z]{2}$'}
+    OrderLine:
+      type: object
+      additionalProperties: false
+      required: [productId, name, quantity, unitPrice, lineTotal]
+      properties:
+        productId: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 200}
+        quantity: {type: integer, minimum: 1, maximum: 99}
+        unitPrice: {$ref: '#/components/schemas/Money'}
+        lineTotal: {$ref: '#/components/schemas/Money'}
+    OrderStatus:
+      type: object
+      additionalProperties: false
+      required: [orderId, status, updatedAt]
+      properties:
+        orderId: {type: string, format: uuid}
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, PAID, PROCESSING, SHIPPED, DELIVERED, CANCELLED]
+        updatedAt: {type: string, format: date-time}
+    Order:
+      type: object
+      additionalProperties: false
+      required: [id, status, items, total, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, PAID, PROCESSING, SHIPPED, DELIVERED, CANCELLED]
+        items:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/OrderLine'}
+        total: {$ref: '#/components/schemas/Money'}
+        paymentId: {type: [string, 'null'], format: uuid}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    OrderPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/Order'}
+        nextCursor: {type: [string, 'null']}
+    PaymentRequest:
+      type: object
+      additionalProperties: false
+      required: [orderId, paymentMethodToken]
+      properties:
+        orderId: {type: string, format: uuid}
+        paymentMethodToken:
+          type: string
+          enum: [mock-success, mock-failure]
+          description: Local mock-provider outcome selector only. Never raw card data.
+    Payment:
+      type: object
+      additionalProperties: false
+      required: [id, orderId, status, amount, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        orderId: {type: string, format: uuid}
+        status: {type: string, enum: [CONFIRMED, FAILED]}
+        amount: {$ref: '#/components/schemas/Money'}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, correlationId, retryable]
+          properties:
+            code: {type: string, minLength: 1, maxLength: 100}
+            message: {type: string, minLength: 1, maxLength: 500}
+            correlationId: {type: string, format: uuid}
+            retryable: {type: boolean}
+  responses:
+    BadRequest:
+      description: Malformed request or query parameter
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: Authenticated caller lacks the required operator role
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Resource does not exist or is not visible to the caller
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Conflict:
+      description: Business conflict or idempotency key reused with a different request
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    ValidationError:
+      description: Request is syntactically valid but violates a field or business constraint
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    RateLimited:
+      description: Request rate limit exceeded
+      headers:
+        Retry-After:
+          schema: {type: integer, minimum: 0}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    InternalError:
+      description: Unexpected server failure
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    BadGateway:
+      description: Invalid response from an upstream dependency
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unavailable:
+      description: Required service temporarily unavailable
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Timeout:
+      description: Upstream operation exceeded its deadline; outcome may be unknown
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}

@@ -1,0 +1,192 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-shop_easy_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-local_admin_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      CATALOG_DB_USER: ${CATALOG_DB_USER:-catalog_user}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:-local_catalog_change_me}
+      ORDERS_DB_USER: ${ORDERS_DB_USER:-orders_user}
+      ORDERS_DB_PASSWORD: ${ORDERS_DB_PASSWORD:-local_orders_change_me}
+      PAYMENTS_DB_USER: ${PAYMENTS_DB_USER:-payments_user}
+      PAYMENTS_DB_PASSWORD: ${PAYMENTS_DB_PASSWORD:-local_payments_change_me}
+      INVENTORY_DB_USER: ${INVENTORY_DB_USER:-inventory_user}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:-local_inventory_change_me}
+      NOTIFICATIONS_DB_USER: ${NOTIFICATIONS_DB_USER:-notifications_user}
+      NOTIFICATIONS_DB_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD:-local_notifications_change_me}
+      AUTH_DB_USER: ${AUTH_DB_USER:?Set AUTH_DB_USER in .env}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/20-create-service-databases.sql:ro
+      - ./infra/postgres/phase8-auth.sql:/tmp/phase8-auth.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-shop_easy}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local_rabbit_change_me}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports: ["127.0.0.1:15672:15672"]
+
+  catalog:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_PACKAGE: catalog
+    environment:
+      SERVICE_NAME: catalog
+      DATABASE_URL: ${CATALOG_DATABASE_URL:-postgresql+psycopg://catalog_user:local_catalog_change_me@postgres:5432/catalog}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  orders:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_PACKAGE: orders
+    environment:
+      SERVICE_NAME: orders
+      DATABASE_URL: ${ORDERS_DATABASE_URL:-postgresql+psycopg://orders_user:local_orders_change_me@postgres:5432/orders}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-shop_easy}:${RABBITMQ_PASSWORD:-local_rabbit_change_me}@rabbitmq/
+      MESSAGING_ENABLED: "true"
+      DOWNSTREAM_TIMEOUT_SECONDS: ${DOWNSTREAM_TIMEOUT_SECONDS:-2.0}
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-3}
+      CIRCUIT_BREAKER_RESET_SECONDS: ${CIRCUIT_BREAKER_RESET_SECONDS:-10.0}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  payments:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_PACKAGE: payments
+    environment:
+      SERVICE_NAME: payments
+      DATABASE_URL: ${PAYMENTS_DATABASE_URL:-postgresql+psycopg://payments_user:local_payments_change_me@postgres:5432/payments}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-shop_easy}:${RABBITMQ_PASSWORD:-local_rabbit_change_me}@rabbitmq/
+      MESSAGING_ENABLED: "true"
+      DOWNSTREAM_TIMEOUT_SECONDS: ${DOWNSTREAM_TIMEOUT_SECONDS:-2.0}
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-3}
+      CIRCUIT_BREAKER_RESET_SECONDS: ${CIRCUIT_BREAKER_RESET_SECONDS:-10.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  inventory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_PACKAGE: inventory
+    environment:
+      SERVICE_NAME: inventory
+      DATABASE_URL: ${INVENTORY_DATABASE_URL:-postgresql+psycopg://inventory_user:local_inventory_change_me@postgres:5432/inventory}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notifications:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_PACKAGE: notifications
+    environment:
+      SERVICE_NAME: notifications
+      DATABASE_URL: ${NOTIFICATIONS_DATABASE_URL:-postgresql+psycopg://notifications_user:local_notifications_change_me@postgres:5432/notifications}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-shop_easy}:${RABBITMQ_PASSWORD:-local_rabbit_change_me}@rabbitmq/
+      MESSAGING_ENABLED: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_PACKAGE: auth
+    environment:
+      AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env}
+      AUTH_ENGINEERING_OPERATOR_IDS: ${ENGINEERING_OPERATOR_IDS:-}
+      AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
+      AUTH_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_PACKAGE: gateway
+    environment:
+      GATEWAY_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GATEWAY_UPSTREAM_TIMEOUT_SECONDS: ${GATEWAY_UPSTREAM_TIMEOUT_SECONDS:-3.0}
+      GATEWAY_CONNECT_TIMEOUT_SECONDS: ${GATEWAY_CONNECT_TIMEOUT_SECONDS:-1.0}
+      GATEWAY_FRONTEND_ORIGINS: ${GATEWAY_FRONTEND_ORIGINS:-http://localhost:3000}
+      GATEWAY_RABBITMQ_MANAGEMENT_URL: ${GATEWAY_RABBITMQ_MANAGEMENT_URL:-http://rabbitmq:15672}
+      GATEWAY_RABBITMQ_USER: ${RABBITMQ_USER:-shop_easy}
+      GATEWAY_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-local_rabbit_change_me}
+      GATEWAY_AUTH_URL: ${GATEWAY_AUTH_URL:-http://auth:8000}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env}
+      GATEWAY_CATALOG_URL: ${GATEWAY_CATALOG_URL:-http://catalog:8000}
+      GATEWAY_ORDERS_URL: ${GATEWAY_ORDERS_URL:-http://orders:8000}
+      GATEWAY_PAYMENTS_URL: ${GATEWAY_PAYMENTS_URL:-http://payments:8000}
+      GATEWAY_INVENTORY_URL: ${GATEWAY_INVENTORY_URL:-http://inventory:8000}
+      GATEWAY_NOTIFICATIONS_URL: ${GATEWAY_NOTIFICATIONS_URL:-http://notifications:8000}
+    depends_on:
+      - catalog
+      - orders
+      - payments
+      - inventory
+      - notifications
+      - auth
+      - rabbitmq
+    ports: ["8000:8000"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - gateway
+    ports: ["3000:3000"]
+
+volumes:
+  postgres_data:

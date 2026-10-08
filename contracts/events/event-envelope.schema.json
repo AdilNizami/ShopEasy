@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.shopeasy.example/events/event-envelope.schema.json",
+  "title": "ShopEasy event envelope",
+  "type": "object",
+  "required": ["eventId", "eventType", "version", "occurredAt", "producer", "data"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "const": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"type": "string", "enum": ["orders", "payments", "shipping"]},
+    "data": {"type": "object"},
+    "correlationId": {"type": "string", "format": "uuid"}
+  },
+  "unevaluatedProperties": false
+}
