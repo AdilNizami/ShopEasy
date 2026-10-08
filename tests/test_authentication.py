@@ -158,28 +158,13 @@ def test_openapi_contract_paths_methods_responses_and_gateway_exposure_match_app
                 )
 
 
-def test_gateway_restricts_catalog_writes_to_operator_tokens(monkeypatch) -> None:
-    monkeypatch.setenv("AUTH_JWT_SECRET", "test-signing-secret-with-at-least-32-bytes")
-    from gateway.main import app
-    from gateway.settings import settings
-    from service_common.identity import issue_access_token
-
-    monkeypatch.setattr(settings, "catalog_url", "http://127.0.0.1:1")
-    customer_token = issue_access_token(UUID(int=1), "customer", 300)
-    operator_token = issue_access_token(UUID(int=2), "operator", 300, role="operator")
-    request_body = {
-        "name": "Unauthorized test product",
-        "price": {"amount": "1.00", "currency": "USD"},
-    }
+def test_gateway_rejects_customer_route_without_a_bearer_token() -> None:
+    from gateway.main import FORWARDED_RESPONSE_HEADERS, app
 
     with TestClient(app) as client:
-        customer_response = client.post(
-            "/v1/products", headers={"Authorization": f"Bearer {customer_token}"}, json=request_body
-        )
-        assert customer_response.status_code == 403
-        assert customer_response.json()["error"]["code"] == "FORBIDDEN"
+        response = client.get("/v1/orders")
 
-        operator_response = client.post(
-            "/v1/products", headers={"Authorization": f"Bearer {operator_token}"}, json=request_body
-        )
-        assert operator_response.status_code == 503
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHORIZED"
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert "www-authenticate" in FORWARDED_RESPONSE_HEADERS

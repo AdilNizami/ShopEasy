@@ -48,6 +48,7 @@ services:
     environment:
       SERVICE_NAME: catalog
       DATABASE_URL: ${CATALOG_DATABASE_URL:-postgresql+psycopg://catalog_user:local_catalog_change_me@postgres:5432/catalog}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       postgres:

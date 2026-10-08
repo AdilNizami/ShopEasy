@@ -37,7 +37,7 @@ Notifications has no customer-facing API in this project.
 
 The gateway permits registration/login without a token, allows product and
 availability reads, and verifies signed bearer tokens for protected routes.
-Catalog writes additionally require the operator role. Orders independently
+Catalog enforces operator authorization for catalog writes. Orders independently
 validates tokens before applying user ownership filters.
 See [authentication and authorization](authentication.md) for token issuance,
 hashing, and resource ownership. Health liveness is unauthenticated for process

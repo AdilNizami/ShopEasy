@@ -43,6 +43,22 @@ def test_event_contracts_are_valid_json_schema_2020_12() -> None:
     }
 
 
+def test_rabbit_channels_confirm_and_raise_for_unroutable_publications() -> None:
+    from service_common.messaging import _confirmed_channel
+
+    class FakeConnection:
+        options: dict[str, bool] = {}
+
+        async def channel(self, **kwargs: bool) -> object:
+            self.options = kwargs
+            return object()
+
+    connection = FakeConnection()
+    asyncio.run(_confirmed_channel(connection))
+
+    assert connection.options == {"publisher_confirms": True, "on_return_raises": True}
+
+
 class CapturingExchange:
     def __init__(self) -> None:
         self.events: list[dict] = []

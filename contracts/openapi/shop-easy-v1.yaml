@@ -117,7 +117,7 @@ paths:
         - bearerAuth: []
       operationId: createProduct
       summary: Create a catalog product
-      description: Operator access is required. Customer accounts may only read products.
+      description: Catalog enforces the operator role. Customer accounts may only read products.
       requestBody:
         required: true
         content:
@@ -161,7 +161,7 @@ paths:
         - bearerAuth: []
       operationId: createCategory
       summary: Create a product category
-      description: Operator access is required. Customer accounts may only read categories.
+      description: Catalog enforces the operator role. Customer accounts may only read categories.
       requestBody:
         required: true
         content:

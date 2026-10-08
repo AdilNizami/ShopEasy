@@ -48,6 +48,7 @@ FORWARDED_RESPONSE_HEADERS = {
     "etag",
     "location",
     "retry-after",
+    "www-authenticate",
 }
 
 
@@ -65,12 +66,6 @@ def _is_public_request(method: str, path: str) -> bool:
             "/v1/categories",
             "/v1/inventory/availability",
         )
-    )
-
-
-def _requires_operator(method: str, path: str) -> bool:
-    return method in {"POST", "PUT", "PATCH", "DELETE"} and any(
-        _is_under(path, prefix) for prefix in ("/v1/products", "/v1/categories")
     )
 
 
@@ -263,9 +258,7 @@ async def proxy(full_path: str, request: Request) -> Response:
         raise HTTPException(status_code=404, detail="API route not found.")
 
     requires_authentication = not _is_public_request(request.method, path)
-    if _requires_operator(request.method, path):
-        _validate_operator(request)
-    elif requires_authentication:
+    if requires_authentication:
         _validate_bearer(request)
 
     base_url = settings.service_urls[target_service].rstrip("/")

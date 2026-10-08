@@ -18,6 +18,7 @@ def ensure_outbox_status_columns(engine: Engine) -> None:
         """ALTER TABLE outbox_events ADD COLUMN IF NOT EXISTS updated_at
         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP""",
         "ALTER TABLE outbox_events ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ NULL",
+        "ALTER TABLE outbox_events ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NULL",
     )
     with engine.begin() as connection:
         for statement in statements:

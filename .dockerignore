@@ -7,3 +7,6 @@ __pycache__
 *.py[cod]
 tests
 docs
+frontend/node_modules
+frontend/.next
+frontend/out

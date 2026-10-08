@@ -38,7 +38,7 @@ Inventory release and payment cancellation/refund are compensating actions, not 
 - Persist an inbox/processed-event ID in the consumer's database in the same transaction as the state change. Duplicates become no-ops.
 - Use a dead-letter queue after bounded attempts. Capture event ID, consumer, error category, and correlation ID; avoid secrets and full payment data in logs.
 - Fix the underlying issue before replaying a DLQ message. Replay must preserve event ID so deduplication remains effective; provide an explicit operator procedure in implementation.
-- The outbox relay retries publishing and exposes oldest pending age/count. Alert on sustained growth. A published event may arrive twice.
+- The outbox relay retries publishing with exponential delays (starting at one second and capped at five minutes), skips records whose retry time has not arrived, and exposes pending age/count. Alert on sustained growth. A published event may arrive twice.
 - Consumers validate schema/version and required fields. Unknown optional fields are ignored; unsupported major versions go to quarantine/DLQ rather than crashing a hot queue forever.
 - Consumers use durable retry queues with 1s/4s/16s delays for transient failures. Permanent schema errors and stable 4xx rejections go directly to a DLQ. The DLQ retains the original message and event ID plus safe failure metadata for operator inspection.
 

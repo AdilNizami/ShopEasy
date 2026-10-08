@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import aio_pika
@@ -23,6 +23,11 @@ DEAD_LETTER_EXCHANGE = "shopeasy.events.dlx"
 RETRY_EXCHANGE = "shopeasy.events.retry"
 RETRY_DELAYS_MS = (1_000, 4_000, 16_000)
 RETRY_HEADER = "x-shop-easy-retry-count"
+
+
+async def _confirmed_channel(connection: Any) -> AbstractChannel:
+    """Require broker confirms and surface returned mandatory messages as errors."""
+    return await connection.channel(publisher_confirms=True, on_return_raises=True)
 
 
 class RabbitEventPublisher:
@@ -46,10 +51,13 @@ class RabbitEventPublisher:
         )
 
 
-def _next_outbox_record(session: Session, record_type: type) -> Any | None:
+def _next_outbox_record(session: Session, record_type: type, now: datetime) -> Any | None:
     return session.scalar(
         select(record_type)
-        .where(record_type.status == "PENDING")
+        .where(
+            record_type.status == "PENDING",
+            (record_type.next_attempt_at.is_(None)) | (record_type.next_attempt_at <= now),
+        )
         .order_by(record_type.occurred_at, record_type.event_id)
         .with_for_update(skip_locked=True)
         .limit(1)
@@ -57,10 +65,15 @@ def _next_outbox_record(session: Session, record_type: type) -> Any | None:
 
 
 async def publish_pending_once(
-    sessions: sessionmaker[Session], record_type: type, publisher: RabbitEventPublisher
+    sessions: sessionmaker[Session],
+    record_type: type,
+    publisher: RabbitEventPublisher,
+    *,
+    now: datetime | None = None,
 ) -> bool:
+    current_time = now or datetime.now(UTC)
     with sessions() as session:
-        record = _next_outbox_record(session, record_type)
+        record = _next_outbox_record(session, record_type, current_time)
         if record is None:
             return False
         event_id = record.event_id
@@ -73,8 +86,11 @@ async def publish_pending_once(
             except Exception as exc:
                 record.attempts += 1
                 record.last_error = type(exc).__name__[:100]
-                record.last_attempt_at = datetime.now(UTC)
-                record.updated_at = datetime.now(UTC)
+                record.last_attempt_at = current_time
+                record.next_attempt_at = current_time + timedelta(
+                    seconds=min(2 ** min(record.attempts - 1, 9), 300)
+                )
+                record.updated_at = current_time
                 session.commit()
                 logger.exception(
                     "event publish failed event_id=%s event_type=%s",
@@ -83,8 +99,9 @@ async def publish_pending_once(
                 )
                 raise
             record.attempts += 1
-            record.last_attempt_at = datetime.now(UTC)
-            record.updated_at = datetime.now(UTC)
+            record.last_attempt_at = current_time
+            record.updated_at = current_time
+            record.next_attempt_at = None
             record.status = "PUBLISHED"
             record.published_at = datetime.now(UTC)
             record.last_error = None
@@ -105,7 +122,7 @@ async def _relay_loop(
         try:
             connection = await aio_pika.connect_robust(rabbitmq_url)
             async with connection:
-                channel = await connection.channel(publisher_confirms=True)
+                channel = await _confirmed_channel(connection)
                 exchange = await channel.declare_exchange(
                     EVENT_EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True
                 )
@@ -130,7 +147,7 @@ async def _consume_loop(
         try:
             connection = await aio_pika.connect_robust(rabbitmq_url)
             async with connection:
-                channel: AbstractChannel = await connection.channel(publisher_confirms=True)
+                channel = await _confirmed_channel(connection)
                 await channel.set_qos(prefetch_count=10)
                 exchange = await channel.declare_exchange(
                     EVENT_EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True

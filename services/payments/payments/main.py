@@ -77,6 +77,7 @@ def observability_snapshot(
                     "correlationId": str(event.correlation_id) if event.correlation_id else None,
                     "retryCount": event.attempts,
                     "lastAttemptAt": event.last_attempt_at.isoformat() if event.last_attempt_at else None,
+                    "nextAttemptAt": event.next_attempt_at.isoformat() if event.next_attempt_at else None,
                     "lastError": event.last_error,
                 }
                 for event in outbox

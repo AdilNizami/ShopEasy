@@ -6,6 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from service_common.identity import Principal, require_operator
+
 from catalog.api.schemas import (
     CategoryCreateRequest,
     CategoryResponse,
@@ -46,7 +48,9 @@ def product_response(
 
 @products_router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
-    payload: ProductCreateRequest, session: Session = Depends(get_session)
+    payload: ProductCreateRequest,
+    _operator: Principal = Depends(require_operator),
+    session: Session = Depends(get_session),
 ) -> ProductResponse:
     category = None
     if payload.category_id is not None:
@@ -136,7 +140,9 @@ def get_product(product_id: UUID, session: Session = Depends(get_session)) -> Pr
 
 @categories_router.post("", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 def create_category(
-    payload: CategoryCreateRequest, session: Session = Depends(get_session)
+    payload: CategoryCreateRequest,
+    _operator: Principal = Depends(require_operator),
+    session: Session = Depends(get_session),
 ) -> CategoryResponse:
     category = CategoryRecord(name=payload.name.strip(), slug=payload.slug)
     if not category.name:

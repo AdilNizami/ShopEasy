@@ -18,12 +18,18 @@ def _sqlite_database(
     return engine, sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def test_catalog_product_create_search_and_detail_use_api_contract() -> None:
+def test_catalog_product_create_search_and_detail_use_api_contract(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AUTH_JWT_SECRET", "test-signing-secret-with-at-least-32-bytes")
     import catalog.api.router as catalog_router
     from catalog.infrastructure.database import Base
     from catalog.main import app
+    from service_common.identity import issue_access_token
 
     engine, sessions = _sqlite_database(Base)
+    customer_token = issue_access_token(uuid4(), "catalog-customer", 300)
+    operator_token = issue_access_token(uuid4(), "catalog-operator", 300, role="operator")
 
     def override_session() -> Iterator[Session]:
         with sessions() as session:
@@ -32,12 +38,22 @@ def test_catalog_product_create_search_and_detail_use_api_contract() -> None:
     app.dependency_overrides[catalog_router.get_session] = override_session
     try:
         with TestClient(app) as client:
+            forbidden = client.post(
+                "/v1/categories",
+                headers={"Authorization": f"Bearer {customer_token}"},
+                json={"name": "Unauthorized", "slug": "unauthorized"},
+            )
+            assert forbidden.status_code == 403
+
             category_response = client.post(
-                "/v1/categories", json={"name": "Tea", "slug": "tea"}
+                "/v1/categories",
+                headers={"Authorization": f"Bearer {operator_token}"},
+                json={"name": "Tea", "slug": "tea"},
             )
             assert category_response.status_code == 201
             product_response = client.post(
                 "/v1/products",
+                headers={"Authorization": f"Bearer {operator_token}"},
                 json={
                     "name": "Green Tea",
                     "description": "Loose leaf tea",
@@ -61,6 +77,7 @@ def test_catalog_product_create_search_and_detail_use_api_contract() -> None:
 
             invalid = client.post(
                 "/v1/products",
+                headers={"Authorization": f"Bearer {operator_token}"},
                 json={"name": "x", "price": {"amount": "-1", "currency": "usd"}},
             )
             assert invalid.status_code == 422
@@ -68,6 +85,7 @@ def test_catalog_product_create_search_and_detail_use_api_contract() -> None:
 
             numeric_amount = client.post(
                 "/v1/products",
+                headers={"Authorization": f"Bearer {operator_token}"},
                 json={"name": "Numeric amount", "price": {"amount": 8.5, "currency": "USD"}},
             )
             assert numeric_amount.status_code == 422

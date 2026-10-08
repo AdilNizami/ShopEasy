@@ -188,7 +188,7 @@ def test_compose_gives_each_bounded_context_a_distinct_database() -> None:
 
     assert len(configured_database_variables) == len(set(configured_database_variables))
 
-    for service_name in ("orders", "payments", "gateway"):
+    for service_name in ("catalog", "orders", "payments", "gateway"):
         assert "AUTH_JWT_SECRET" in compose["services"][service_name]["environment"]
 
 

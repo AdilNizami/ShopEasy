@@ -9,13 +9,15 @@ order status change. There is no cross-service transaction or database access.
 ## Relay and record status
 
 A background relay in each producer service selects pending rows, publishes a
-persistent RabbitMQ message, waits for publisher confirmation, then records
-`PUBLISHED`. Rows retain their stable `event_id`; the relay records `attempts`,
-`last_attempt_at`, `last_error`, `created_at`, `updated_at`, and `published_at`.
-If publishing fails, the row stays `PENDING` with the failure details. The relay
-retries it after RabbitMQ becomes available. Multiple relay workers use row
-locking with `SKIP LOCKED` so they do not normally claim the same pending row at
-the same time.
+persistent RabbitMQ message with mandatory routing and publisher confirmation,
+then records `PUBLISHED`. Rows retain their stable `event_id`; the relay records
+`attempts`, `last_attempt_at`, `next_attempt_at`, `last_error`, `created_at`,
+`updated_at`, and `published_at`. If publishing fails, the row stays `PENDING`
+with the failure details. The relay retries with exponential delays from one
+second up to five minutes; other eligible events can proceed while one event
+waits for its next attempt. Multiple relay workers use row locking with
+`SKIP LOCKED` so they do not normally claim the same pending row at the same
+time.
 
 ## Failure window and delivery guarantee
 
@@ -35,8 +37,8 @@ a database and a broker is not claimed.
 ## Operational limit
 
 This phase retries transient publish errors while the service is running and
-retries pending rows after restart. It does not yet add exponential backoff,
-operator dashboards, or a separate permanent-failure state. A permanently
+retries pending rows after restart. It does not add a separate permanent-failure
+state. A permanently
 invalid event will remain pending and needs investigation; do not mark it
 published to silence the relay. The startup bootstrap adds the Phase 5 columns
 to existing Phase 4 PostgreSQL outbox tables. Larger schema changes should use
