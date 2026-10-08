@@ -59,6 +59,22 @@ def test_rabbit_channels_confirm_and_raise_for_unroutable_publications() -> None
     assert connection.options == {"publisher_confirms": True, "on_return_raises": True}
 
 
+def test_negative_broker_confirmation_is_a_publish_failure() -> None:
+    class RejectingExchange:
+        async def publish(self, message: object, **kwargs: object) -> bool:
+            return False
+
+    event = {
+        "eventId": str(uuid4()),
+        "eventType": "PaymentConfirmed",
+        "version": 1,
+    }
+    publisher = RabbitEventPublisher(RejectingExchange())
+
+    with pytest.raises(ConnectionError, match="negatively acknowledged"):
+        asyncio.run(publisher.publish(event))
+
+
 class CapturingExchange:
     def __init__(self) -> None:
         self.events: list[dict] = []

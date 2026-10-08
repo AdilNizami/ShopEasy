@@ -30,13 +30,21 @@ async def _confirmed_channel(connection: Any) -> AbstractChannel:
     return await connection.channel(publisher_confirms=True, on_return_raises=True)
 
 
+async def _publish_confirmed(exchange: Any, message: Any, **kwargs: Any) -> None:
+    """Treat a negative publisher confirmation as a failed publication."""
+    confirmation = await exchange.publish(message, **kwargs)
+    if confirmation is False:
+        raise ConnectionError("RabbitMQ negatively acknowledged the publication.")
+
+
 class RabbitEventPublisher:
     def __init__(self, exchange: AbstractExchange) -> None:
         self.exchange = exchange
 
     async def publish(self, event: dict[str, Any]) -> None:
         payload = json.dumps(event, separators=(",", ":")).encode()
-        await self.exchange.publish(
+        await _publish_confirmed(
+            self.exchange,
             aio_pika.Message(
                 body=payload,
                 content_type="application/json",
@@ -291,7 +299,8 @@ async def process_event_delivery(
 
         try:
             if invalid_retry_count or _is_permanent_failure(exc) or retry_count >= len(RETRY_DELAYS_MS):
-                await dead_letter_exchange.publish(
+                await _publish_confirmed(
+                    dead_letter_exchange,
                     _copy_message(message, failure_headers),
                     routing_key=queue_name,
                     mandatory=True,
@@ -309,7 +318,8 @@ async def process_event_delivery(
                 failure_headers[RETRY_HEADER] = next_retry
                 event_routing_key = original_routing_key
                 retry_route = _retry_routing_key(queue_name, event_routing_key, next_retry)
-                await retry_exchange.publish(
+                await _publish_confirmed(
+                    retry_exchange,
                     _copy_message(message, failure_headers),
                     routing_key=retry_route,
                     mandatory=True,
