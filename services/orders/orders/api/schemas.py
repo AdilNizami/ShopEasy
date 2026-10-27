@@ -20,6 +20,12 @@ class CartItemRequest(BaseModel):
     quantity: int = Field(ge=1, le=99)
 
 
+class CartItemQuantityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quantity: int = Field(ge=1, le=99)
+
+
 class CartItemResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
